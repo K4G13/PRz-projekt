@@ -1,8 +1,6 @@
 #mpiexec -n 4 python -B main.py 2 3
 from mpi4py import MPI
 import sys
-import time
-import asyncio
 
 def log(rank,lamport_clk,msg):
     colors = [
@@ -23,21 +21,17 @@ def log(rank,lamport_clk,msg):
         '\033[106m', #cyan background
         '\033[107m', #white background
     ]
-    print(f"{colors[rank%len(colors)]}KRADZIEJ [{rank:<2}]  l_c={lamport_clk:<3}  {msg}{colors[0]}")
+    print(f"{colors[rank%len(colors)]}KRADZIEJ [{rank:>2}]  l_c={lamport_clk:<3}  {msg}{colors[0]}")
 
-def get_messages(comm,rank,lamport_clk):
+def get_messages(comm):
     messages = []
     while True:
         status = MPI.Status()
-        #sprawdź czy jest wiadomosc do odebrania od obojętnie kogo. Jak jest, to zapisz o niej informacje w 'status'
         if comm.iprobe(source=MPI.ANY_SOURCE, status=status): 
             message = comm.recv(source=status.Get_source())
-            log(rank,lamport_clk,f"Otrzymal od [{status.Get_source()}]: {message}")
             messages.append((status.Get_source(), message))
-        else:
-            break
+        else: break
     return messages
-
 
 # STAŁE
 comm = MPI.COMM_WORLD
@@ -79,21 +73,19 @@ if __name__ == "__main__":
 
     while True:
 
+        #ROZESŁANIE REQUESTÓW DO WSZYSTKICH ODNOŚNIE SEKCJI #1
         if cs_flag_1 == "Init" or cs_flag_1 == "Released":
-            cs_flag_1 = "Wanted"
             log(RANK,lamport_clk,"Zmiana flagi #1 na WANTED")
-            log(RANK,lamport_clk,f"Rozsyla REQUESTA <1,{lamport_clk},{RANK}> do wszystkich")
+            cs_flag_1 = "Wanted"
+            log(RANK,lamport_clk,f"Wysyla REQ,1,{lamport_clk} do wszystkich")
             for dest_id in range(N):
-                if dest_id != RANK:
-                    comm.send(f"REQ,1,{lamport_clk},{RANK}", dest=dest_id)
-
-        #CZEKA NA ODPOWIDZI
-        if cs_flag_1 == "Wanted":
-            messages = get_messages(comm,RANK,lamport_clk)
-            log(RANK,lamport_clk,"Umiera")
-            exit()
+                if dest_id != RANK: 
+                    comm.send(f"REQ,1,{lamport_clk}", dest=dest_id)
+            continue
         
-        if cs_flag_1 == "Held":
-            log(RANK,lamport_clk,"Krazy po miescie")
-            
+        #ODBIERA I WYSYŁA WIADOMOŚCI
+        if cs_flag_1 == "Wanted":
+            log(RANK,lamport_clk,"Umiera")
+            exit()    
+
 
