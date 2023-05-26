@@ -114,4 +114,10 @@ Danych jest K kradziejów. Dostępne są nierozróżnialne zasoby S sprzętu do 
     </li>
 </ol>
 
-## ∙ Kod albo coś nwm 👩🏻‍💻
+## ∙ Uruchamianie programu 👩🏻‍💻
+```
+    mpiexec -n <ilość_procesów_kradziejów> python -B main.py <ilość_sprzętów> <ilość_miejsc_w_laboratorium>
+```
+```
+    mpiexec -n 4 python -B main.py 2 3
+```
