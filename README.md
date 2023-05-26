@@ -21,15 +21,16 @@ Danych jest K kradziejów. Dostępne są nierozróżnialne zasoby S sprzętu do 
         <b>Dostęp do sekcji krytycznej</b>
         <ol>
             <li>
-                Każdy proces posiada <b>zegar</b> który przy inicjacji jest ustawiony na 0 oraz <b>dwie flagi</b> oznaczające chęci dostępu od sekcji krytycznych
+                Każdy proces posiada <b>zegar</b> który przy inicjacji jest ustawiony na 0 oraz <b>dwie flagi</b> oznaczające chęci dostępu od sekcji krytycznych oraz zmienną lokalną <b>ilość_sprzętów</b> równą <b>S</b> przy inicjacji
             </li>
             <li>
                 Enter(Nr_sekcji_krytycznej)
                 <ul>
                     <li>Flaga statusu danej sekcji := <b>“Wanted”</b></li>
                     <li>Multicast Request’u <b>[Nr_sekcji_krytycznej, Czas_Lamport’a, ID_procesu]</b> do wszystkich innych procesów kradziejów</li>
-                    <li>Oczekiwanie na odpowiedź od (K-wielkość_sekcji_krytycznej) procesów</li>
+                    <li>Oczekiwanie na odpowiedź od <b>(K-wielkość_sekcji_krytycznej)</b> procesów <b>ORAZ</b> <b>ilość_sprzętów > 0</b></li>
                     <li>Flaga statusu danej sekcji := <b>“Held”</b></li>
+                    <li><b>Ilość_sprzętów := ilość_sprzętów - 1</b></li>
                     <li>Wejście do sekcji krytycznej</li>
                 </ul>
             </li>
@@ -50,9 +51,16 @@ Danych jest K kradziejów. Dostępne są nierozróżnialne zasoby S sprzętu do 
                         <ul>
                             <li><b>Zegar := zegar + 1</b></li>
                             <li>Odeślij potwierdzenie zawierające obecną wartość zegara oraz ID_procesu</li>
+                            <li><b>Ilość_sprzętów := ilość_sprzętów - 1</b></li>
                         </ul>
                     </li>
                 </ul>
+            </li> 
+            <li>
+                Odbiór “Release”’a 
+                <ul>
+                    <li><b>Ilość_sprzętów := ilość_sprzętów + 1</b></li>
+                </ul>               
             </li> 
             <li>
                 Exit()
@@ -60,6 +68,7 @@ Danych jest K kradziejów. Dostępne są nierozróżnialne zasoby S sprzętu do 
                     <li>Wyjście z sekcji krytycznej</li>
                     <li>Flaga statusu danej sekcji := <b>“Released”</b></li>
                     <li>Zegar := <b>max(zegary_zakolejkowanych_requestów) + 1</b></li>
+                    <li><b>Ilość_sprzętów := ilość_sprzętów - ILOŚĆ REQUESTÓW W KOLEJCE</b></li>
                     <li>Odeślij potwierdzenia zawierające obecną wartość zegara oraz ID_procesu do wszystkich zakolejkowanych “Requestów” w lokalnej kolejce</li>
                 </ul>
             </li> 
@@ -99,7 +108,7 @@ Danych jest K kradziejów. Dostępne są nierozróżnialne zasoby S sprzętu do 
         <b>Ładowanie sprzętu</b>
         <ol>
             <li>Wątek zasypia na <b>T</b> czasu</li>
-            <li>Wątek wychodzi z PIERWSZEJ sekcji krytycznej <b>(Krok 2: Exit)</b></li>
+            <li>Wątek wychodzi z PIERWSZEJ sekcji krytycznej <b>(Krok 2: Exit) + wysyła sygnał Release do wszystkich włącznie ze swoim oryginalnym procesem</b></li>
             <li>Wątek kończy swoją egzystencję</li>
         </ol>
     </li>
