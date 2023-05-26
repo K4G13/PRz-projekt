@@ -1,8 +1,10 @@
 #mpiexec -n 4 python -B main.py 2 3
 from mpi4py import MPI
 import sys
+import time
+import asyncio
 
-def kradziej_log(rank,lamport_clk,msg):
+def log(rank,lamport_clk,msg):
     colors = [
         '\033[0m',   #gray
         '\033[91m',  #red
@@ -21,12 +23,33 @@ def kradziej_log(rank,lamport_clk,msg):
         '\033[106m', #cyan background
         '\033[107m', #white background
     ]
-    print(f"{colors[rank%len(colors)]}KRADZIEJ [{rank:<3}]  l_c={lamport_clk:<3}  {msg}{colors[0]}")
+    print(f"{colors[rank%len(colors)]}KRADZIEJ [{rank:<2}]  l_c={lamport_clk:<3}  {msg}{colors[0]}")
+
+def get_messages(comm,rank,lamport_clk):
+    messages = []
+    while True:
+        status = MPI.Status()
+        #sprawdź czy jest wiadomosc do odebrania od obojętnie kogo. Jak jest, to zapisz o niej informacje w 'status'
+        if comm.iprobe(source=MPI.ANY_SOURCE, status=status): 
+            message = comm.recv(source=status.Get_source())
+            log(rank,lamport_clk,f"Otrzymal od [{status.Get_source()}]: {message}")
+            messages.append((status.Get_source(), message))
+        else:
+            break
+    return messages
+
+
+# STAŁE
+comm = MPI.COMM_WORLD
+RANK = comm.rank                # Identyfikator procesu kradzieja
+K = comm.Get_size()             # Ilość kradziejów
+S = int(sys.argv[1])            # Ilość sprzętów do kradziejowania humoru :o
+N = int(sys.argv[2])            # Ilość miejsc w laboratorium
+EQUIPMENT_CHARGING_TIME = 5     # Czas ładowania sprzętu
+CITY_CIRCULATION_TIME = (10,60) # Czas krążenia po mieście (min,max)
+GOOD_MOOD_PROBABILITY = 0.55    # Prawdopodobieństwo złapania dobrego humoru
 
 if __name__ == "__main__":
-
-    comm = MPI.COMM_WORLD
-    RANK = comm.rank # Identyfikator procesu kradzieja
 
     if len(sys.argv) != 3:
         if RANK == 0:
@@ -46,16 +69,31 @@ if __name__ == "__main__":
             print("\033[93mSprobuj: mpiexec -n <ilosc_kradziejow> python -B main.py <ilosc_sprzetow> <ilosc_miejsc_w_laboratorium>\033[0m")
         exit(-1)
 
-    # INICJACJA KRADZIEJA
-    K = comm.Get_size()             # Ilość kradziejów
-    S = int(sys.argv[1])            # Ilość sprzętów do kradziejowania humoru :o
-    N = int(sys.argv[2])            # Ilość miejsc w laboratorium
-    EQUIPMENT_CHARGING_TIME = 5     # Czas ładowania sprzętu
-    CITY_CIRCULATION_TIME = (10,60) # Czas krążenia po mieście (min,max)
-    GOOD_MOOD_PROBABILITY = 0.55    # Prawdopodobieństwo złapania dobrego humoru
+    # INICJACJA ZMIENNYCH KRADZIEJA
     lamport_clk = 0                 # Zegar lamporta procesu kradzieja
     cs_flag_1 = "Init"              # Flaga procesu kradzieja dla PIERWSZEJ sekcji krytycznej
     cs_flag_2 = "Init"              # Flaga procesu kradzieja dla DRUGIEJ sekcji krytycznej
     equipment_amount = S            # Aktualna pamiętana ilość dostępnych sprzętów (może być ujemna!)
+    requests_queue = []             # Kolejka requestów
+    log(RANK,lamport_clk,"Init")
 
-    kradziej_log(RANK,lamport_clk,"rozpoczyna swoj byt")
+    while True:
+
+        if cs_flag_1 == "Init" or cs_flag_1 == "Released":
+            cs_flag_1 = "Wanted"
+            log(RANK,lamport_clk,"Zmiana flagi #1 na WANTED")
+            log(RANK,lamport_clk,f"Rozsyla REQUESTA <1,{lamport_clk},{RANK}> do wszystkich")
+            for dest_id in range(N):
+                if dest_id != RANK:
+                    comm.send(f"REQ,1,{lamport_clk},{RANK}", dest=dest_id)
+
+        #CZEKA NA ODPOWIDZI
+        if cs_flag_1 == "Wanted":
+            messages = get_messages(comm,RANK,lamport_clk)
+            log(RANK,lamport_clk,"Umiera")
+            exit()
+        
+        if cs_flag_1 == "Held":
+            log(RANK,lamport_clk,"Krazy po miescie")
+            
+
