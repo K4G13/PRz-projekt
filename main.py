@@ -1,8 +1,19 @@
 #mpiexec -n 4 python -B main.py 2 3
 from mpi4py import MPI
 import sys
+import time
 
-def log(rank,lamport_clk,msg):
+# STAŁE
+comm = MPI.COMM_WORLD
+RANK = comm.rank                # Identyfikator procesu kradzieja
+K = comm.Get_size()             # Ilość kradziejów
+S = int(sys.argv[1])            # Ilość sprzętów do kradziejowania humoru :o
+N = int(sys.argv[2])            # Ilość miejsc w laboratorium
+EQUIPMENT_CHARGING_TIME = 5     # Czas ładowania sprzętu
+CITY_CIRCULATION_TIME = (10,60) # Czas krążenia po mieście (min,max)
+GOOD_MOOD_PROBABILITY = 0.55    # Prawdopodobieństwo złapania dobrego humoru
+
+def log(lamport_clk,msg):
     colors = [
         '\033[0m',   #gray
         '\033[91m',  #red
@@ -21,9 +32,9 @@ def log(rank,lamport_clk,msg):
         '\033[106m', #cyan background
         '\033[107m', #white background
     ]
-    print(f"{colors[rank%len(colors)]}KRADZIEJ [{rank:>2}]  l_c={lamport_clk:<3}  {msg}{colors[0]}")
+    print(f"{colors[RANK%len(colors)]}KRADZIEJ [{RANK:>2}]  l_c={lamport_clk:<3}  {msg}{colors[0]}")
 
-def get_messages(comm):
+def get_messages():
     messages = []
     while True:
         status = MPI.Status()
@@ -33,15 +44,11 @@ def get_messages(comm):
         else: break
     return messages
 
-# STAŁE
-comm = MPI.COMM_WORLD
-RANK = comm.rank                # Identyfikator procesu kradzieja
-K = comm.Get_size()             # Ilość kradziejów
-S = int(sys.argv[1])            # Ilość sprzętów do kradziejowania humoru :o
-N = int(sys.argv[2])            # Ilość miejsc w laboratorium
-EQUIPMENT_CHARGING_TIME = 5     # Czas ładowania sprzętu
-CITY_CIRCULATION_TIME = (10,60) # Czas krążenia po mieście (min,max)
-GOOD_MOOD_PROBABILITY = 0.55    # Prawdopodobieństwo złapania dobrego humoru
+def send_request(critical_section_number):
+    log(lamport_clk,f"Wysyla REQ,1,{lamport_clk} do wszystkich")
+    for dest_id in range(K):
+        if dest_id != RANK: 
+            comm.send(f"REQ,{critical_section_number},{lamport_clk}", dest=dest_id)
 
 if __name__ == "__main__":
 
@@ -69,23 +76,24 @@ if __name__ == "__main__":
     cs_flag_2 = "Init"              # Flaga procesu kradzieja dla DRUGIEJ sekcji krytycznej
     equipment_amount = S            # Aktualna pamiętana ilość dostępnych sprzętów (może być ujemna!)
     requests_queue = []             # Kolejka requestów
-    log(RANK,lamport_clk,"Init")
+    ack_amount = 0                  # Ilość otrzymanych ACK
+    log(lamport_clk,"Init")
 
     while True:
 
-        #ROZESŁANIE REQUESTÓW DO WSZYSTKICH ODNOŚNIE SEKCJI #1
+        #ROZESŁANIE REQUESTÓW DO WSZYSTKICH ODNOŚNIE #1 SEKCJI 
         if cs_flag_1 == "Init" or cs_flag_1 == "Released":
-            log(RANK,lamport_clk,"Zmiana flagi #1 na WANTED")
+            log(lamport_clk,"CS_FLAG #1 = Wanted")
             cs_flag_1 = "Wanted"
-            log(RANK,lamport_clk,f"Wysyla REQ,1,{lamport_clk} do wszystkich")
-            for dest_id in range(N):
-                if dest_id != RANK: 
-                    comm.send(f"REQ,1,{lamport_clk}", dest=dest_id)
+            send_request(1)
             continue
         
-        #ODBIERA I WYSYŁA WIADOMOŚCI
+        #ZARZĄDZANIEM WIADOMOŚCIAMI PRZED WEJŚCIEM DO #1 SEKCJI 
         if cs_flag_1 == "Wanted":
-            log(RANK,lamport_clk,"Umiera")
-            exit()    
+            messages = get_messages()
+            for message in messages:
+                log(lamport_clk,f"Wiadomosc {message}")
+            exit()
+        
 
 
