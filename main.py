@@ -44,11 +44,17 @@ def get_messages():
         else: break
     return messages
 
-def send_request(critical_section_number):
+def send_request(critical_section_number,lamport_clk):
     log(lamport_clk,f"Wysyla REQ,1,{lamport_clk} do wszystkich")
     for dest_id in range(K):
         if dest_id != RANK: 
             comm.send(f"REQ,{critical_section_number},{lamport_clk}", dest=dest_id)
+
+def send_ack(critical_section_number,dest_id,lamport_clk):
+    log(lamport_clk,f"Odsylam ACK,{critical_section_number} do [{dest_id}]")
+    comm.send(f"ACK,{critical_section_number},{lamport_clk}", dest=dest_id)
+
+
 
 if __name__ == "__main__":
 
@@ -76,7 +82,6 @@ if __name__ == "__main__":
     cs_flag_2 = "Init"              # Flaga procesu kradzieja dla DRUGIEJ sekcji krytycznej
     equipment_amount = S            # Aktualna pamiętana ilość dostępnych sprzętów (może być ujemna!)
     requests_queue = []             # Kolejka requestów
-    ack_amount = 0                  # Ilość otrzymanych ACK
     log(lamport_clk,"Init")
 
     while True:
@@ -85,15 +90,66 @@ if __name__ == "__main__":
         if cs_flag_1 == "Init" or cs_flag_1 == "Released":
             log(lamport_clk,"CS_FLAG #1 = Wanted")
             cs_flag_1 = "Wanted"
-            send_request(1)
+            send_request(1,lamport_clk)
             continue
         
         #ZARZĄDZANIEM WIADOMOŚCIAMI PRZED WEJŚCIEM DO #1 SEKCJI 
         if cs_flag_1 == "Wanted":
+            
+            ack_amount = 0 # Ilość otrzymanych ACK
+            while ack_amount < K - S:
+
+                messages = get_messages()
+                for message in messages:
+                    log(lamport_clk,f"Wiadomosc {message}")
+                    author =  message[0]
+                    content = message[1].split(",")
+                    # content[0]: Typ wiadomości
+                    # content[1]: Której sekcji dotyczy
+                    # contnet[2]: Zegar lamporta autora
+
+                    if content[0] == "REQ" and content[1] == "1":
+                        if int(content[2]) < lamport_clk or (int(content[2]) == lamport_clk and int(author) < RANK):
+                            lamport_clk += 1
+                            send_ack(1,int(author),lamport_clk)
+                            equipment_amount -= 1
+                        else:
+                            log(lamport_clk,f"Kolejka + {message}")
+                            requests_queue.append(message)
+                        continue
+
+                    if content[0] == "ACK" and content[1] == "1":
+                        log(lamport_clk,f"Dostal ACK od {author}")
+                        ack_amount += 1
+                        continue
+
+            cs_flag_1 = "Held"
+
+        #1. SEKCJA KRYTYCZNA
+        if cs_flag_1 == "Held":
+
+            log(lamport_clk,"JESTEM W SEKCJI KRYTYCZNEJ #01")
+            # S E K C J A   K R Y T Y C Z N A
+            log(lamport_clk,"WYCHODZE Z SEKCJI KRYTYCZNEJ #01")
+
             messages = get_messages()
-            for message in messages:
+            for message in messages: 
+                requests_queue.append(message)
+            for message in requests_queue:
                 log(lamport_clk,f"Wiadomosc {message}")
+                author =  message[0]
+                content = message[1].split(",")
+
+                if content[0] == "REQ" and content[1] == "1":
+                    send_ack(1,int(author),lamport_clk)
+                    if int(content[2]) >= lamport_clk:
+                        lamport_clk = int(content[2])
+                    lamport_clk += 1       
+                    equipment_amount -= 1             
+            requests_queue = []
+            
+            cs_flag_1 = "Released"   
+
             exit()
         
-
 
