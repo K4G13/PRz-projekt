@@ -128,5 +128,5 @@ Danych jest K kradziejów. Dostępne są nierozróżnialne zasoby S sprzętu do 
 
     source ~/myenv/bin/activate
 
-    mpiexec -n 4 -hostfile hostfile python -B main.py 2 3 
+    mpiexec -n 4 -hostfile hostfile python -B main.py 3 2 
 ```

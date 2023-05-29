@@ -63,7 +63,7 @@ def send_ack(critical_section_number, dest_id, lamport_clk):
 
 def charge_equipment():
     print(" > SPRZET LADUJE SIE")
-    # time.sleep(EQUIPMENT_CHARGING_TIME)
+    time.sleep(EQUIPMENT_CHARGING_TIME)
     print(" > SPRZET NALADOWANY")
     for dest_id in range(K):
         comm.send("RELEASE,1,0", dest=dest_id)
@@ -223,7 +223,8 @@ if __name__ == "__main__":
 
                 requests_queue = []
 
-                charge_equipment()
+                charge_thread = threading.Thread(target=charge_equipment)
+                charge_thread.start()
 
                 lamport_clk += 1
                 log(lamport_clk, "WYCHODZI Z SEKCJI KRYTYCZNEJ #01", eq=equipment_amount, ack_a=ack_amount)
